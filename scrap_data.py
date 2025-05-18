@@ -44,55 +44,74 @@ with open('jobs.csv', 'w', newline='', encoding='utf-8') as csvfile:
     for label in LABEL_SEARCH:
 
         labelFormated = label.replace(" ", "%20")
-        url = f"https://portal.api.gupy.io/api/job?name={labelFormated}&offset=0&limit=10000"
-        try:
-            request = requests.get(url, headers=HEADERS)
-            request.raise_for_status()  
-            #aqui convertemos os JSON em em um dict python
-            data = request.json().get('data', [])
+        offset = 0
+        limit = 10
+        total = None
+        jobCount = 0
 
-            jobCount = 0
-            for job in data:
-                job_id = job.get('id', '')
+        while True:
+            url = f"https://portal.api.gupy.io/api/job?name={labelFormated}&offset={offset}"
+            try:
+                response = requests.get(url, headers=HEADERS)
+                response.raise_for_status()  
+                json_response = response.json()
+
+                if total is None:
+                    pagination = json_response.get("pagination", {})
+                    total = pagination["total"]
+
+                data = json_response.get("data", [])
                 
-                # Verificar se o id da vaga ja foi salvo
-                if job_id not in ids:
-                    ids.add(job_id)
+                if not data:
+                    break
+
+                print(f"Buscando vagas para {label} ({offset}/{total})")
+
+                for job in data:
+                    job_id = job.get('id', '')
+                    
+                    # Verificar se o id da vaga ja foi salvo
+                    if job_id not in ids:
+                        ids.add(job_id)
 
 
-                    # Converter a string publishedDate para um objeto datetime
-                    data1_str = job.get('publishedDate', '')
-                    data1 = datetime.strptime(data1_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        # Converter a string publishedDate para um objeto datetime
+                        data1_str = job.get('publishedDate', '')
+                        data1 = datetime.strptime(data1_str, "%Y-%m-%dT%H:%M:%S.%fZ")
 
-                    description = job.get('description', '')
+                        description = job.get('description', '')
 
-                    #dados que utilizaremos na nossa analise
-                    row = [
-                        job_id,
-                        job.get('companyId', ''),
-                        job.get('name', ''),
-                        description,
-                        job.get('careerPageName', ''),
-                        job.get('type', ''),
-                        job.get('publishedDate', ''),
-                        job.get('isRemoteWork', ''),
-                        job.get('city', ''),
-                        job.get('state', ''),
-                        job.get('country', ''),
-                        job.get('jobUrl', ''),
-                        date.today().strftime('%d/%m/%Y'),
-                    ]
+                        #dados que utilizaremos na nossa analise
+                        row = [
+                            job_id,
+                            job.get('companyId', ''),
+                            job.get('name', ''),
+                            description,
+                            job.get('careerPageName', ''),
+                            job.get('type', ''),
+                            job.get('publishedDate', ''),
+                            job.get('isRemoteWork', ''),
+                            job.get('city', ''),
+                            job.get('state', ''),
+                            job.get('country', ''),
+                            job.get('jobUrl', ''),
+                            date.today().strftime('%d/%m/%Y'),
+                        ]
 
-                    # só adiciona se a data for maior que a data minima especificada
-                    # só adiciona se a string contiver TODAS as palavras chaves
-                    if data1 > START_DATE_DATETIME and find_word_keys(WORD_KEYS_REQUIRED, description):
-                        writer.writerow(row)
-                        jobCount += 1
-
-            print(f"Numero de vagas encontradas: {jobCount}")
+                        # só adiciona se a data for maior que a data minima especificada
+                        # só adiciona se a string contiver TODAS as palavras chaves
+                        if data1 > START_DATE_DATETIME and find_word_keys(WORD_KEYS_REQUIRED, description):
+                            writer.writerow(row)
+                            jobCount += 1
+                
+                offset += limit
+                if offset >= total:
+                    break
             
-        #printando erro caso ocorra
-        except requests.exceptions.RequestException as e:
-            print(f"Erro ao buscar dados para {label}: {e}")
+            #printando erro caso ocorra
+            except requests.exceptions.RequestException as e:
+                print(f"Erro ao buscar dados para {label}: {e}")
+            
+        print(f"Numero de vagas encontradas: {jobCount}")
 
 
